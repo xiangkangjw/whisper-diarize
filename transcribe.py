@@ -155,16 +155,24 @@ def merge_transcript_and_diarization(whisper_result, diarization):
         })
 
     def get_speaker_at(t):
-        """Find which speaker is talking at time t."""
-        best = None
-        best_overlap = 0
+        """Find which speaker is talking at time t.
+        Falls back to nearest segment so we never return UNKNOWN."""
+        # 1. Prefer a segment that contains t
+        best_overlap, best_speaker = 0.0, None
         for seg in speaker_segments:
             if seg["start"] <= t <= seg["end"]:
                 overlap = min(seg["end"], t) - max(seg["start"], t)
                 if overlap >= best_overlap:
-                    best = seg["speaker"]
                     best_overlap = overlap
-        return best or "UNKNOWN"
+                    best_speaker = seg["speaker"]
+        if best_speaker:
+            return best_speaker
+        # 2. Fall back to nearest segment boundary (eliminates UNKNOWN)
+        if not speaker_segments:
+            return "UNKNOWN"
+        nearest = min(speaker_segments,
+                      key=lambda s: min(abs(s["start"] - t), abs(s["end"] - t)))
+        return nearest["speaker"]
 
     # Assign each word a speaker
     for w in words:
@@ -200,7 +208,42 @@ def merge_transcript_and_diarization(whisper_result, diarization):
         "text": "".join(cw["word"] for cw in current_words).strip(),
     })
 
+    # Post-process: merge short fragments into neighbours
+    lines = _merge_short_fragments(lines)
+    # Post-process: drop noise-only lines (repeated chars, e.g. 这这这这这)
+    lines = [l for l in lines if not _is_noise(l["text"])]
+
     return lines
+
+
+_MIN_DURATION = 0.8   # seconds — lines shorter than this get merged into the previous
+
+def _merge_short_fragments(lines):
+    """Absorb very short lines (< 0.8s) into the preceding line."""
+    if len(lines) <= 1:
+        return lines
+    out = [lines[0]]
+    for line in lines[1:]:
+        prev = out[-1]
+        duration = line["end"] - line["start"]
+        if duration < _MIN_DURATION:
+            # Absorb into previous regardless of speaker
+            out[-1] = {
+                "start":   prev["start"],
+                "end":     line["end"],
+                "speaker": prev["speaker"],
+                "text":    prev["text"] + line["text"],
+            }
+        else:
+            out.append(line)
+    return out
+
+
+import re as _re
+_REPEAT_RE = _re.compile(r'^(.)\1{4,}$')  # 5+ repetitions of same char
+
+def _is_noise(text):
+    return bool(_REPEAT_RE.match(text.strip()))
 
 
 def format_time(seconds: float) -> str:
