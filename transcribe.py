@@ -21,6 +21,36 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()  # loads .env from current directory
 
+# ── Structured progress for the macOS app ───────────────────────────────────
+# Monkey-patch tqdm so mlx-whisper + pyannote emit APP_PROGRESS lines.
+# Format: APP_PROGRESS step=<0-3> pct=<0-100>
+_APP_STEP = 0
+
+try:
+    import tqdm as _tqdm_mod
+    from tqdm import tqdm as _OrigTqdm
+
+    class _AppTqdm(_OrigTqdm):
+        _prev_pct: int = -1
+
+        def update(self, n=1):
+            super().update(n)
+            if self.total and self.total > 0:
+                pct = int(100 * self.n / self.total)
+                if pct != self._prev_pct:
+                    self._prev_pct = pct
+                    print(f"APP_PROGRESS step={_APP_STEP} pct={pct}", flush=True)
+
+    _tqdm_mod.tqdm = _AppTqdm
+    try:
+        import tqdm.auto as _tqdm_auto
+        _tqdm_auto.tqdm = _AppTqdm
+    except Exception:
+        pass
+except Exception:
+    pass
+# ────────────────────────────────────────────────────────────────────────────
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Transcribe audio with speaker diarization")
@@ -57,6 +87,8 @@ def parse_args():
 def transcribe_with_mlx(audio_path: str, model: str, language: str | None):
     """Run mlx-whisper transcription with word-level timestamps."""
     import mlx_whisper
+    global _APP_STEP
+    _APP_STEP = 0
 
     print(f"🎙️  Transcribing with mlx-whisper ({model})...")
     result = mlx_whisper.transcribe(
@@ -64,8 +96,9 @@ def transcribe_with_mlx(audio_path: str, model: str, language: str | None):
         path_or_hf_repo=model,
         word_timestamps=True,
         language=language,
-        verbose=False,
+        verbose=None,  # None = tqdm progress bars
     )
+    print(f"APP_PROGRESS step=0 pct=100", flush=True)
     print(f"✅ Transcription done. Detected language: {result.get('language', 'unknown')}")
     return result
 
@@ -74,6 +107,8 @@ def diarize(audio_path: str, hf_token: str, num_speakers: int | None):
     """Run pyannote diarization to identify speakers."""
     from pyannote.audio import Pipeline
     import torch
+    global _APP_STEP
+    _APP_STEP = 1
 
     print("👥 Running speaker diarization (pyannote)...")
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
@@ -90,6 +125,7 @@ def diarize(audio_path: str, hf_token: str, num_speakers: int | None):
         kwargs["num_speakers"] = num_speakers
 
     diarization = pipeline(audio_path, **kwargs)
+    print("APP_PROGRESS step=1 pct=100", flush=True)
     print("✅ Diarization done.")
     return diarization
 
@@ -227,6 +263,7 @@ def main():
     # Step 3: Merge
     print("🔀 Merging transcription + diarization...")
     lines = merge_transcript_and_diarization(whisper_result, diarization)
+    print("APP_PROGRESS step=2 pct=100", flush=True)
 
     # Step 4: Output
     transcript = format_transcript(lines)
@@ -236,7 +273,7 @@ def main():
 
     with open(output_path, "w") as f:
         f.write(transcript + "\n")
-
+    print("APP_PROGRESS step=3 pct=100", flush=True)
     print(f"💾 Saved to: {output_path}")
 
 
