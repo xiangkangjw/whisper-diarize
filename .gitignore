@@ -34,3 +34,6 @@ __pycache__/
 # Swift build artifacts
 app/.build/
 dist/
+
+# Firecrawl research scratch files
+.firecrawl/
