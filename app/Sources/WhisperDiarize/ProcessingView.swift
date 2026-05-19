@@ -186,13 +186,15 @@ private struct StepCard: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                // Progress bar — shown when active or done with known progress
+                // Progress bar — always shown at bottom of card
                 if let p = progress {
                     ProgressView(value: p)
+                        .progressViewStyle(.linear)
                         .tint(status == .done ? .green : Color.accentColor)
                         .animation(.linear(duration: 0.25), value: p)
                 } else if status == .active {
                     ProgressView()
+                        .progressViewStyle(.linear)
                         .tint(Color.accentColor)
                 }
             }
