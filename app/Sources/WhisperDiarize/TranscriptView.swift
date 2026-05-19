@@ -1,4 +1,5 @@
 import SwiftUI
+import WhisperDiarizeCore
 
 // Palette — one color per speaker index
 private let speakerPalette: [Color] = [

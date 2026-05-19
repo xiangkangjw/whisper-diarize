@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct DropZoneView: View {
     @EnvironmentObject private var runner: TranscriptionRunner
+    @Environment(\.openSettings) private var openSettings
     @AppStorage("hfToken")   private var hfToken = ""
     @AppStorage("model")     private var model = "mlx-community/whisper-large-v3-mlx"
     @AppStorage("language")  private var language = ""
@@ -104,7 +105,7 @@ struct DropZoneView: View {
                 Spacer()
 
                 Button("Open Settings") {
-                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                    openSettings()
                 }
                 .buttonStyle(.plain)
                 .font(.caption)

@@ -1,22 +1,8 @@
 import Foundation
 import SwiftUI
+import WhisperDiarizeCore
 
-// MARK: - Models
-
-struct TranscriptLine: Identifiable {
-    let id = UUID()
-    let timestamp: String
-    let speaker: String
-    let text: String
-    let speakerIndex: Int
-}
-
-enum RunnerState: Equatable {
-    case idle
-    case running(phase: String)
-    case done
-    case failed(String)
-}
+// Models are now in WhisperDiarizeCore (TranscriptLine, RunnerState)
 
 // MARK: - Runner
 
@@ -137,29 +123,7 @@ final class TranscriptionRunner: ObservableObject {
 
     private func loadTranscript(from url: URL) {
         guard let content = try? String(contentsOf: url, encoding: .utf8) else { return }
-        var speakerIndex: [String: Int] = [:]
-        var idx = 0
-        // Pattern: [00:01.20 → 00:05.44]  SPEAKER_00: Hello world
-        let pattern = #"^\[(.+?)\]\s+(\S+?):\s+(.+)$"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return }
-        transcript = content
-            .components(separatedBy: .newlines)
-            .filter { !$0.isEmpty }
-            .compactMap { line -> TranscriptLine? in
-                let range = NSRange(line.startIndex..., in: line)
-                guard let m = regex.firstMatch(in: line, range: range),
-                      let tsRange = Range(m.range(at: 1), in: line),
-                      let spRange = Range(m.range(at: 2), in: line),
-                      let txRange = Range(m.range(at: 3), in: line) else { return nil }
-                let speaker = String(line[spRange])
-                if speakerIndex[speaker] == nil { speakerIndex[speaker] = idx; idx += 1 }
-                return TranscriptLine(
-                    timestamp: String(line[tsRange]),
-                    speaker: speaker,
-                    text: String(line[txRange]),
-                    speakerIndex: speakerIndex[speaker]!
-                )
-            }
+        transcript = parseTranscript(content)
     }
 
     // MARK: - Setup helpers
