@@ -369,15 +369,16 @@ def _clean_speaker_segments(segments):
     return out
 
 def _merge_short_fragments(lines):
-    """Absorb very short lines (< 0.8s) into the preceding line."""
+    """Merge very short lines (< 0.8s) into an adjacent line from the SAME speaker.
+    If no same-speaker neighbour exists, keep the fragment as-is."""
     if len(lines) <= 1:
         return lines
     out = [lines[0]]
     for line in lines[1:]:
         prev = out[-1]
         duration = line["end"] - line["start"]
-        if duration < _MIN_DURATION:
-            # Absorb into previous regardless of speaker
+        if duration < _MIN_DURATION and prev["speaker"] == line["speaker"]:
+            # Same speaker — safe to merge
             out[-1] = {
                 "start":   prev["start"],
                 "end":     line["end"],
@@ -385,6 +386,7 @@ def _merge_short_fragments(lines):
                 "text":    prev["text"] + line["text"],
             }
         else:
+            # Different speaker or long enough — keep separate
             out.append(line)
     return out
 
@@ -438,21 +440,21 @@ def polish_transcript(lines: list, llm_model: str, language: str | None) -> list
     OVERLAP = 3  # context lines carried over between chunks
 
     system_prompt = (
-        "You are a transcript cleanup assistant for Chinese speech."
+        "You are a transcript correction assistant for Chinese speech."
         " The user gives you transcript lines in EXACTLY this format:\n"
         "  [MM:SS.ss → MM:SS.ss]  SPEAKER_XX: text\n\n"
-        "Rules:\n"
-        "1. ALWAYS keep the full format including [timestamp → timestamp]  SPEAKER_XX: prefix\n"
-        "2. Fix transcription errors using context (例:『北北理工』→『北理工』, 『没有没有』→『没有』, 『牟封』→『牌』)\n"
-        "3. Merge consecutive lines from the SAME SPEAKER if they form one thought\n"
-        "   (use first line's start time, last line's end time)\n"
-        "4. Add/fix Chinese punctuation\n"
-        "5. Return ONLY the lines, no explanations, no markdown"
+        "Your ONLY tasks:\n"
+        "1. Keep EVERY line — do NOT merge, drop, or reorder any lines\n"
+        "2. Fix transcription errors using context "
+        "(例:『北北理工』→『北理工』, 『没有没有』→『没有』, 『好生』→『好申』)\n"
+        "3. Add/fix Chinese punctuation\n"
+        "4. Keep the EXACT format: [ts → ts]  SPEAKER_XX: text\n"
+        "5. Return the SAME number of lines, one per line, no blank lines, no explanations"
         if is_chinese else
-        "You are a transcript cleanup assistant."
-        " Keep the EXACT format: [ts → ts]  SPEAKER_XX: text."
-        " Fix errors using context, add punctuation, merge fragmented same-speaker lines."
-        " Return only lines, no explanations."
+        "You are a transcript correction assistant."
+        " Fix transcription errors using context and add punctuation."
+        " Keep EVERY line — do NOT merge or drop any."
+        " Return the exact same number of lines in [ts → ts]  SPEAKER_XX: text format."
     )
 
     def _fmt(chunk):
@@ -497,6 +499,10 @@ def polish_transcript(lines: list, llm_model: str, language: str | None) -> list
                         'speaker': spk,
                         'text':    m2.group(3).strip(),
                     })
+        # Safety: if LLM returned wrong line count, fall back to originals
+        if len(result) != len(fallback_chunk):
+            print(f"   ⚠️  LLM returned {len(result)} lines (expected {len(fallback_chunk)}), using originals", flush=True)
+            return fallback_chunk
         return result if result else fallback_chunk
 
     print(f"🤖 Loading LLM ({llm_model})...")
