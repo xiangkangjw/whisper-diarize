@@ -10,6 +10,7 @@ final class AppUITests: XCTestCase {
         app.launch()
     }
 
+    @MainActor
     override func tearDownWithError() throws {
         app.terminate()
     }
