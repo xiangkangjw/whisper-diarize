@@ -6,7 +6,7 @@ final class AppUITests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        app = XCUIApplication()
+        app = XCUIApplication(bundleIdentifier: "com.whisper-diarize")
         app.launch()
     }
 
