@@ -56,7 +56,6 @@ if [[ ! -d "$RESOURCE_BUNDLE" ]]; then
 fi
 
 cp -R "$RESOURCE_BUNDLE" "$APP_BUNDLE/Contents/Resources/"
-cp -R "$RESOURCE_BUNDLE" "$APP_BUNDLE/Contents/MacOS/"
 
 if [[ "$BUNDLE_PYTHON" == "1" ]]; then
   PYTHON_ENV="$APP_BUNDLE/Contents/Resources/Python"
@@ -95,7 +94,11 @@ PY
 fi
 
 echo "==> Codesigning app bundle"
-codesign --force --deep --options runtime --sign "$CODESIGN_IDENTITY" "$APP_BUNDLE"
+# Sign nested bundles first, then the app (--deep is unreliable for complex structures)
+for bundle in "$APP_BUNDLE/Contents/Resources/"*.bundle; do
+  [[ -d "$bundle" ]] && codesign --force --sign "$CODESIGN_IDENTITY" "$bundle"
+done
+codesign --force --options runtime --sign "$CODESIGN_IDENTITY" "$APP_BUNDLE"
 
 echo "==> Creating DMG artifact"
 TEMP_DMG_DIR="$(mktemp -d)"
