@@ -82,6 +82,8 @@ struct DropZoneView: View {
                     Text("large-v3-turbo").tag("mlx-community/whisper-large-v3-turbo")
                     Text("medium").tag("mlx-community/whisper-medium-mlx")
                     Text("small").tag("mlx-community/whisper-small-mlx")
+                    Text("BELLE-zh").tag("BRlin/Belle-whisper-large-v3-zh-mlx-bf16")
+                    Text("Breeze").tag("Kenji8000/Breeze-ASR-25-mlx")
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()

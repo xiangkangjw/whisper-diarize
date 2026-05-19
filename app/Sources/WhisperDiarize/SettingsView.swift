@@ -35,14 +35,22 @@ struct SettingsView: View {
             Section {
                 Picker("Whisper Model", selection: $model) {
                     Group {
-                        Text("large-v3 (most accurate, ~3GB)")
+                        Text("── Multilingual (99+ languages) ──").disabled(true)
+                        Text("large-v3 (best multilingual, ~3GB)")
                             .tag("mlx-community/whisper-large-v3-mlx")
-                        Text("large-v3-turbo (fast + accurate)")
+                        Text("large-v3-turbo (2× faster, ~1.5GB)")
                             .tag("mlx-community/whisper-large-v3-turbo")
-                        Text("medium")
+                        Text("medium (~1.5GB)")
                             .tag("mlx-community/whisper-medium-mlx")
-                        Text("small (fastest)")
+                        Text("small (fastest, ~500MB)")
                             .tag("mlx-community/whisper-small-mlx")
+                    }
+                    Group {
+                        Text("── Chinese-Optimised ──").disabled(true)
+                        Text("BELLE large-v3-zh — Mainland Chinese (推荐)")
+                            .tag("BRlin/Belle-whisper-large-v3-zh-mlx-bf16")
+                        Text("Breeze-ASR-25 — Chinese-English code-switching")
+                            .tag("Kenji8000/Breeze-ASR-25-mlx")
                     }
                 }
 
