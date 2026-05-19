@@ -11,6 +11,9 @@ final class TranscriptionRunner: ObservableObject {
     @Published var state: RunnerState = .idle
     @Published var logLines: [String] = []
     @Published var transcript: [TranscriptLine] = []
+    @Published var currentStep: Int = 0          // 0=transcribe 1=diarize 2=merge 3=save
+    @Published var stepDetails: [Int: String] = [:] // extra info per step (e.g. language)
+    @Published var startTime: Date? = nil
 
     private var process: Process?
 
@@ -20,6 +23,9 @@ final class TranscriptionRunner: ObservableObject {
         state = .running(phase: "Preparing…")
         logLines = []
         transcript = []
+        currentStep = 0
+        stepDetails = [:]
+        startTime = Date()
 
         guard let uvPath = findUV() else {
             state = .failed("uv not found.\nInstall it from https://docs.astral.sh/uv/ and relaunch the app.")
@@ -97,6 +103,9 @@ final class TranscriptionRunner: ObservableObject {
         process?.terminate()
         process = nil
         state = .idle
+        currentStep = 0
+        stepDetails = [:]
+        startTime = nil
     }
 
     func reset() {
@@ -104,6 +113,9 @@ final class TranscriptionRunner: ObservableObject {
         state = .idle
         logLines = []
         transcript = []
+        currentStep = 0
+        stepDetails = [:]
+        startTime = nil
     }
 
     // MARK: - Log ingestion
@@ -111,11 +123,32 @@ final class TranscriptionRunner: ObservableObject {
     private func ingest(_ lines: [String]) {
         for line in lines {
             logLines.append(line)
-            if line.contains("Transcribing")                      { state = .running(phase: "Transcribing audio…") }
-            else if line.contains("cached transcription")         { state = .running(phase: "Loaded cached transcription") }
-            else if line.contains("diarization") || line.contains("Diarization") { state = .running(phase: "Identifying speakers…") }
-            else if line.contains("Merging")                      { state = .running(phase: "Merging results…") }
-            else if line.contains("Saved to")                     { state = .running(phase: "Saving…") }
+            if line.contains("Transcribing") {
+                currentStep = 0
+                state = .running(phase: "Transcribing audio…")
+            } else if line.contains("cached transcription") {
+                currentStep = 0
+                stepDetails[0] = "Loaded from cache"
+                state = .running(phase: "Loaded cached transcription")
+            } else if line.contains("Transcription done") || line.contains("Detected language") {
+                if let lang = line.components(separatedBy: ":").last?.trimmingCharacters(in: .whitespaces) {
+                    stepDetails[0] = "Language: \(lang)"
+                }
+                currentStep = 1
+                state = .running(phase: "Identifying speakers…")
+            } else if line.contains("diarization") || line.contains("Diarization") {
+                currentStep = 1
+                state = .running(phase: "Identifying speakers…")
+            } else if line.contains("Diarization done") {
+                currentStep = 2
+                state = .running(phase: "Merging results…")
+            } else if line.contains("Merging") {
+                currentStep = 2
+                state = .running(phase: "Merging results…")
+            } else if line.contains("Saved to") {
+                currentStep = 3
+                state = .running(phase: "Saving…")
+            }
         }
     }
 
