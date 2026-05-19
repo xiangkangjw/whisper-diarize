@@ -1,6 +1,6 @@
 APP_RESOURCES = app/Sources/WhisperDiarize/Resources
 
-.PHONY: sync-app-resources test test-ui run
+.PHONY: sync-app-resources test test-ui run package
 
 # Build a proper .app bundle, ad-hoc sign it, and launch
 run:
@@ -12,6 +12,11 @@ run:
 	@cp -r app/.build/debug/WhisperDiarize_WhisperDiarize.bundle app/.build/WhisperDiarize.app/Contents/Resources/ 2>/dev/null || true
 	codesign --force --deep --sign - app/.build/WhisperDiarize.app
 	open app/.build/WhisperDiarize.app
+
+# Build dist/WhisperDiarize.app and dist/WhisperDiarize-macos-arm64.zip.
+# By default this embeds a relocatable Python environment and dependencies.
+package:
+	scripts/package-macos.sh
 
 sync-app-resources:
 	cp transcribe.py   $(APP_RESOURCES)/transcribe.py

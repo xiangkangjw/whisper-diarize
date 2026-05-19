@@ -36,11 +36,6 @@ final class TranscriptionRunner: ObservableObject {
         lastAudioURL = audioURL
         lastArgs = (hfToken, model, language, speakers, polish, polishModel)
 
-        guard let uvPath = findUV() else {
-            state = .failed("uv not found.\nInstall it from https://docs.astral.sh/uv/ and relaunch the app.")
-            return
-        }
-
         guard let workDir = prepareWorkDir() else {
             state = .failed("Could not set up working directory in Application Support.")
             return
@@ -50,24 +45,34 @@ final class TranscriptionRunner: ObservableObject {
         let outputURL = workDir
             .appendingPathComponent(audioURL.deletingPathExtension().lastPathComponent + "_transcript.txt")
 
-        var args: [String] = [
-            "run", "--project", workDir.path,
+        guard let runtime = findPythonRuntime() else {
+            state = .failed("Python runtime not found.\nUse a packaged app with bundled Python, or install uv for development builds.")
+            return
+        }
+
+        var scriptArgs: [String] = [
             scriptPath,
             audioURL.path,
             "--output", outputURL.path,
             "--model", model,
         ]
-        if !hfToken.isEmpty   { args += ["--hf-token", hfToken] }
-        if !language.isEmpty  { args += ["--language", language] }
-        if let n = speakers   { args += ["--speakers", String(n)] }
-        if polish             { args += ["--polish", "--polish-model", polishModel] }
-        if force              { args += ["--force"] }
+        if !hfToken.isEmpty   { scriptArgs += ["--hf-token", hfToken] }
+        if !language.isEmpty  { scriptArgs += ["--language", language] }
+        if let n = speakers   { scriptArgs += ["--speakers", String(n)] }
+        if polish             { scriptArgs += ["--polish", "--polish-model", polishModel] }
+        if force              { scriptArgs += ["--force"] }
 
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: uvPath)
-        p.arguments = args
+        switch runtime {
+        case .bundled(let pythonURL, _):
+            p.executableURL = pythonURL
+            p.arguments = scriptArgs
+        case .uv(let uvPath):
+            p.executableURL = URL(fileURLWithPath: uvPath)
+            p.arguments = ["run", "--project", workDir.path] + scriptArgs
+        }
         p.currentDirectoryURL = workDir
-        p.environment = enrichedEnv()
+        p.environment = enrichedEnv(for: runtime)
 
         let outPipe = Pipe()
         let errPipe = Pipe()
@@ -213,11 +218,38 @@ final class TranscriptionRunner: ObservableObject {
         for (name, ext) in [("transcribe", "py"), ("pyproject", "toml"), ("uv", "lock")] {
             let dst = dir.appendingPathComponent("\(name).\(ext)")
             guard !FileManager.default.fileExists(atPath: dst.path) else { continue }
-            if let src = Bundle.module.url(forResource: name, withExtension: ext) {
+            if let src = AppResources.url(forResource: name, withExtension: ext) {
                 try? FileManager.default.copyItem(at: src, to: dst)
             }
         }
         return dir
+    }
+
+    private enum PythonRuntime {
+        case bundled(pythonURL: URL, envURL: URL)
+        case uv(path: String)
+    }
+
+    private func findPythonRuntime() -> PythonRuntime? {
+        if let bundled = findBundledPython() {
+            return bundled
+        }
+        if let uvPath = findUV() {
+            return .uv(path: uvPath)
+        }
+        return nil
+    }
+
+    private func findBundledPython() -> PythonRuntime? {
+        guard let resourcesURL = Bundle.main.resourceURL else { return nil }
+        let envURL = resourcesURL.appendingPathComponent("Python", isDirectory: true)
+        for name in ["python3", "python"] {
+            let pythonURL = envURL.appendingPathComponent("bin/\(name)")
+            if FileManager.default.isExecutableFile(atPath: pythonURL.path) {
+                return .bundled(pythonURL: pythonURL, envURL: envURL)
+            }
+        }
+        return nil
     }
 
     private func findUV() -> String? {
@@ -229,9 +261,13 @@ final class TranscriptionRunner: ObservableObject {
         ].first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
-    private func enrichedEnv() -> [String: String] {
+    private func enrichedEnv(for runtime: PythonRuntime) -> [String: String] {
         var env = ProcessInfo.processInfo.environment
-        let extra = "/opt/homebrew/bin:/usr/local/bin:\(NSHomeDirectory())/.local/bin:\(NSHomeDirectory())/.cargo/bin"
+        var extra = "/opt/homebrew/bin:/usr/local/bin:\(NSHomeDirectory())/.local/bin:\(NSHomeDirectory())/.cargo/bin"
+        if case .bundled(_, let envURL) = runtime {
+            extra = envURL.appendingPathComponent("bin").path + ":" + extra
+            env["VIRTUAL_ENV"] = envURL.path
+        }
         env["PATH"] = extra + ":" + (env["PATH"] ?? "/usr/bin:/bin")
         env["PYTHONUNBUFFERED"] = "1"   // force unbuffered output so lines stream immediately
         return env

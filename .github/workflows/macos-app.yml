@@ -1,0 +1,54 @@
+name: Build macOS App
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  package-macos:
+    name: Package macOS app
+    runs-on: macos-15
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Show tool versions
+        run: |
+          swift --version
+          uv --version
+
+      - name: Run unit tests
+        run: make test
+
+      - name: Package app
+        run: make package
+
+      - name: Upload packaged app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WhisperDiarize-macos-arm64
+          path: dist/WhisperDiarize-macos-arm64.zip
+          if-no-files-found: error
+
+      - name: Attach packaged app to GitHub release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload \
+            "${{ github.event.release.tag_name }}" \
+            dist/WhisperDiarize-macos-arm64.zip \
+            --clobber

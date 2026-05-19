@@ -1,23 +1,25 @@
 # WhisperDiarize — macOS App
 
-Native macOS app for the whisper-diarize pipeline. Drag, drop, transcribe.
+Native macOS app for the whisper-diarize pipeline. Drag, drop, transcribe, and review speaker-labeled transcripts.
 
 <img width="860" alt="WhisperDiarize screenshot" src="../docs/app-screenshot.png">
 
 ## Features
 
 - 🖱️ **Drag & drop** audio files onto the window
-- 📊 **Live log** streams output as transcription runs
-- 🎨 **Speaker-colored** transcript with per-speaker filter pills
+- 📊 **Live progress** for transcription, speaker detection, alignment, saving, and polish
+- 🎨 **Speaker-colored** transcript with per-speaker filtering
 - 🔍 **Search** through the transcript
 - 📋 **Copy** to clipboard or **Save** as `.txt`
-- ⚙️ **Settings panel** — model, language, speaker count, HF token
+- ⚙️ **Settings panel** — token, model, language, speaker count, and polish model
+- 🧩 **Shared design system** in `AppDesign.swift`
+- 🖼️ **Bundled macOS app icon**
 
 ## Requirements
 
 - macOS 14+
 - Xcode 16+
-- `uv` installed ([astral.sh/uv](https://docs.astral.sh/uv/))
+- `uv` installed for development builds and packaging ([astral.sh/uv](https://docs.astral.sh/uv/))
 - HuggingFace token with diarization model access
 
 ## Build & Run
@@ -33,6 +35,16 @@ open Package.swift
 
 Then **Product → Run** (`⌘R`).
 
+From the command line:
+
+```bash
+cd app
+swift build
+.build/debug/WhisperDiarize
+```
+
+Note: SwiftPM builds a raw executable, not a fully packaged `.app`. For Dock/Finder behavior, wrap the executable in an app bundle as described below.
+
 ## First Launch
 
 1. Open **Settings** (`⌘,`) and paste your HuggingFace token
@@ -44,12 +56,53 @@ Then **Product → Run** (`⌘R`).
 
 The Python environment is set up automatically on first use (installs into `~/Library/Application Support/WhisperDiarize/`).
 
+Development builds fall back to `uv` when no bundled Python runtime is present. Packaged builds include a bundled Python runtime and locked Python dependencies.
+
+## Packaging
+
+Current packaging flow:
+
+```bash
+make package
+```
+
+This creates:
+
+```text
+dist/WhisperDiarize.app
+dist/WhisperDiarize-macos-arm64.zip
+```
+
+The packaged app includes:
+
+- release Swift binary
+- `Info.plist`
+- app icon
+- SwiftPM resource bundle
+- relocatable uv-managed Python 3.11 runtime at `Contents/Resources/Python`
+- locked Python dependencies from `uv.lock`
+
+For distribution outside your own machine, codesign and notarize the `.app` or `.dmg`.
+
+Long term, prefer a dedicated Xcode macOS app target for cleaner archive/sign/notarize workflows.
+
+## GitHub Artifacts
+
+`.github/workflows/macos-app.yml` packages the app on:
+
+- pushes to `main`
+- manual workflow runs
+- published GitHub releases
+
+The workflow uploads `WhisperDiarize-macos-arm64.zip` as a GitHub Actions artifact. When a GitHub Release is published, the ZIP is attached to that release automatically.
+
 ## Architecture
 
 ```
 App.swift                   @main entry point
 ContentView.swift           Root — switches between 4 states
-├── DropZoneView.swift      idle: drag & drop + quick settings bar
+├── AppDesign.swift         design system tokens and shared components
+├── DropZoneView.swift      idle: drag & drop + session settings
 ├── ProcessingView.swift    running: progress + live log stream
 ├── TranscriptView.swift    done: speaker-colored, searchable transcript
 ├── ErrorView.swift         failed: error + retry

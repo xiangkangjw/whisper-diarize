@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 enum AppDesign {
     enum Spacing {
@@ -130,18 +133,49 @@ struct SidebarSurface<Content: View>: View {
     }
 }
 
+enum AppResources {
+    static func url(forResource name: String, withExtension ext: String) -> URL? {
+        if let url = Bundle.main.url(forResource: name, withExtension: ext) {
+            return url
+        }
+        if let url = Bundle.main.resourceURL?.appendingPathComponent("\(name).\(ext)"),
+           FileManager.default.fileExists(atPath: url.path) {
+            return url
+        }
+        return Bundle.module.url(forResource: name, withExtension: ext)
+    }
+
+    #if os(macOS)
+    static func image(named name: String) -> NSImage? {
+        if let url = url(forResource: name, withExtension: "png") {
+            return NSImage(contentsOf: url)
+        }
+        return nil
+    }
+    #endif
+}
+
 struct AppLogo: View {
     var size: CGFloat = 42
     var showShadow = false
 
     var body: some View {
-        Image("AppIcon", bundle: .module)
+        logoImage
             .resizable()
             .scaledToFit()
             .frame(width: size, height: size)
             .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
             .shadow(color: .black.opacity(showShadow ? 0.14 : 0), radius: 8, y: 3)
             .accessibilityLabel("WhisperDiarize")
+    }
+
+    private var logoImage: Image {
+        #if os(macOS)
+        if let image = AppResources.image(named: "AppIcon") {
+            return Image(nsImage: image)
+        }
+        #endif
+        return Image("AppIcon", bundle: .module)
     }
 }
 

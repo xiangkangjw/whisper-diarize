@@ -33,3 +33,4 @@ __pycache__/
 
 # Swift build artifacts
 app/.build/
+dist/

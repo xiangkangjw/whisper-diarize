@@ -2,6 +2,7 @@
 
 Fast audio transcription with **speaker diarization**, optimized for Apple Silicon (M1/M2/M3/M4).
 
+- 🖥️ **Native macOS app** — drag, drop, transcribe, search, copy, and save
 - 🎙️ **Transcription** via [`mlx-whisper`](https://github.com/ml-explore/mlx-examples/tree/main/whisper) — runs on Apple Silicon GPU via MLX
 - 👥 **Diarization** via [`pyannote.audio`](https://github.com/pyannote/pyannote-audio) — runs on Metal (MPS)
 - ⚡ **Fast** — both models run natively on Apple Silicon, no GPU server needed
@@ -22,10 +23,87 @@ Fast audio transcription with **speaker diarization**, optimized for Apple Silic
 - Python 3.11+
 - [`uv`](https://docs.astral.sh/uv/) — for dependency management
 - A free [HuggingFace](https://huggingface.co/settings/tokens) account and token
+- Xcode 16+ if building the native app
 
 ---
 
-## Setup
+## Native macOS App
+
+The SwiftUI app lives in [`app/`](app/). It provides:
+
+- drag and drop audio/video input
+- model, language, speaker count, token, and polish settings
+- live processing state and logs
+- searchable speaker-labeled transcript
+- copy and save actions
+
+Run from Xcode:
+
+```bash
+open app/Package.swift
+```
+
+Then use **Product -> Run**.
+
+Or build from the command line:
+
+```bash
+cd app
+swift build
+```
+
+The app bundles `transcribe.py`, `pyproject.toml`, `uv.lock`, and app icon resources. On first use it copies the Python worker files into:
+
+```text
+~/Library/Application Support/WhisperDiarize/
+```
+
+Development builds still fall back to `uv` if no bundled Python runtime is present. Packaged builds include a bundled Python runtime and the locked Python dependencies.
+
+---
+
+## Packaging
+
+Build a distributable `.app` and ZIP artifact:
+
+```bash
+make package
+```
+
+This creates:
+
+```text
+dist/WhisperDiarize.app
+dist/WhisperDiarize-macos-arm64.zip
+```
+
+The package script:
+
+1. Builds the Swift app in release mode
+2. Creates a macOS `.app` bundle
+3. Copies the app binary, `Info.plist`, app icon, and SwiftPM resources
+4. Creates a relocatable uv-managed Python 3.11 environment in `Contents/Resources/Python`
+5. Installs the locked Python dependencies into the app bundle
+6. Ad-hoc signs the app by default
+7. Creates `dist/WhisperDiarize-macos-arm64.zip`
+
+Long term, a dedicated Xcode macOS app target would make archive, signing, icons, and notarization cleaner than manually wrapping a SwiftPM executable.
+
+Important: packaged builds bundle Python and Python dependencies, but Whisper, pyannote, and LLM model weights are still downloaded on first use.
+
+### GitHub Builds
+
+GitHub Actions builds the packaged macOS app on pushes to `main`, manual workflow runs, and published GitHub releases:
+
+- workflow: `.github/workflows/macos-app.yml`
+- artifact: `WhisperDiarize-macos-arm64.zip`
+- release asset: attached automatically when a GitHub Release is published
+
+Release builds are ad-hoc signed by default. Use a Developer ID certificate and notarization for broad distribution outside your own machines.
+
+---
+
+## CLI Setup
 
 **1. Clone and install dependencies**
 
