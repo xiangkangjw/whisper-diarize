@@ -3,11 +3,13 @@ import UniformTypeIdentifiers
 
 struct DropZoneView: View {
     @EnvironmentObject private var runner: TranscriptionRunner
+    @AppStorage("hfToken")    private var hfToken = ""
     @Environment(\.openSettings) private var openSettings
-    @AppStorage("hfToken")   private var hfToken = ""
     @AppStorage("model")     private var model = "mlx-community/whisper-large-v3-mlx"
     @AppStorage("language")  private var language = ""
     @AppStorage("speakers")  private var speakersRaw = 0   // 0 = auto
+    @AppStorage("polish")    private var polish = false
+    @AppStorage("polishModel") private var polishModel = "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
 
     @State private var isTargeted = false
     @State private var showFilePicker = false
@@ -138,7 +140,9 @@ struct DropZoneView: View {
                 hfToken: hfToken,
                 model: model,
                 language: language,
-                speakers: speakers
+                speakers: speakers,
+                polish: polish,
+                polishModel: polishModel
             )
         }
     }

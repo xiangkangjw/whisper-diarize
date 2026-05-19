@@ -20,7 +20,8 @@ final class TranscriptionRunner: ObservableObject {
 
     // MARK: - Public API
 
-    func transcribe(audioURL: URL, hfToken: String, model: String, language: String, speakers: Int?) async {
+    func transcribe(audioURL: URL, hfToken: String, model: String, language: String, speakers: Int?,
+                    polish: Bool = false, polishModel: String = "mlx-community/Qwen2.5-1.5B-Instruct-4bit") async {
         state = .running(phase: "Preparing…")
         logLines = []
         transcript = []
@@ -53,6 +54,7 @@ final class TranscriptionRunner: ObservableObject {
         if !hfToken.isEmpty   { args += ["--hf-token", hfToken] }
         if !language.isEmpty  { args += ["--language", language] }
         if let n = speakers   { args += ["--speakers", String(n)] }
+        if polish             { args += ["--polish", "--polish-model", polishModel] }
 
         let p = Process()
         p.executableURL = URL(fileURLWithPath: uvPath)
@@ -162,6 +164,11 @@ final class TranscriptionRunner: ObservableObject {
             } else if line.contains("Merging") {
                 currentStep = 2
                 state = .running(phase: "Merging results…")
+            } else if line.contains("Polishing transcript") || line.contains("LLM loaded") {
+                currentStep = 4
+                state = .running(phase: "Polishing with LLM…")
+            } else if line.contains("Polishing done") {
+                stepProgress[4] = 1.0
             } else if line.contains("Saved to") {
                 state = .running(phase: "Saving…")
             }

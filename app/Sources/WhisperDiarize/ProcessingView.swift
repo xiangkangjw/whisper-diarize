@@ -7,10 +7,11 @@ private struct Step {
 }
 
 private let steps: [Step] = [
-    Step(icon: "waveform",              title: "Transcribing",        subtitle: "mlx-whisper · Apple Silicon GPU"),
-    Step(icon: "person.2.wave.2.fill",  title: "Identifying Speakers", subtitle: "pyannote · Metal"),
-    Step(icon: "arrow.triangle.merge",  title: "Merging",             subtitle: "Aligning words with speakers"),
-    Step(icon: "doc.text.fill",         title: "Saving",              subtitle: "Writing transcript file"),
+    Step(icon: "waveform",              title: "Transcribing",          subtitle: "mlx-whisper · Apple Silicon GPU"),
+    Step(icon: "person.2.wave.2.fill",  title: "Identifying Speakers",   subtitle: "pyannote · Metal"),
+    Step(icon: "arrow.triangle.merge",  title: "Merging",               subtitle: "Aligning words with speakers"),
+    Step(icon: "doc.text.fill",         title: "Saving",                subtitle: "Writing transcript file"),
+    Step(icon: "sparkles",              title: "Polishing",             subtitle: "LLM cleanup · Qwen2.5"),
 ]
 
 struct ProcessingView: View {

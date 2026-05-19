@@ -100,6 +100,17 @@ def parse_args():
         default=None,
         help="Number of speakers (optional, auto-detected if not set)",
     )
+    parser.add_argument(
+        "--polish",
+        action="store_true",
+        default=False,
+        help="Run a local LLM (Qwen2.5-1.5B) to add punctuation and clean up the transcript",
+    )
+    parser.add_argument(
+        "--polish-model",
+        default="mlx-community/Qwen2.5-1.5B-Instruct-4bit",
+        help="MLX LLM model for polishing (default: Qwen2.5-1.5B-Instruct-4bit)",
+    )
     return parser.parse_args()
 
 
@@ -363,6 +374,62 @@ def format_transcript(lines: list) -> str:
     return "\n".join(output)
 
 
+def polish_transcript(lines: list, llm_model: str, language: str | None) -> list:
+    """
+    Use a local LLM to tidy up each speaker turn:
+    - Add punctuation
+    - Fix obvious transcription errors
+    - Remove excessive filler words
+    Preserves timestamps and speaker labels exactly.
+    """
+    from mlx_lm import load, generate
+
+    is_chinese = not language or language.startswith("zh")
+
+    system_prompt = (
+        "你是一个转录清理助手。用户会提供一段口语转录文本，请你：
+1. 添加合适的标点符号（逗号、句号、问号等）
+2. 保持口语自然，不要改变语气和语境
+3. 不要添加、删除或更改内容和词语
+4. 只返回清理后的文本，不要加任何解释或说明"""
+        if is_chinese else
+        "You are a transcript cleanup assistant. Add punctuation and fix obvious errors. "
+        "Keep the natural spoken style. Return only the cleaned text, no explanations."
+    )
+
+    print(f"🤖 Loading LLM ({llm_model})...")
+    model, tokenizer = load(llm_model)
+    print("✅ LLM loaded. Polishing transcript...")
+
+    total = len(lines)
+    polished = []
+
+    for i, line in enumerate(lines):
+        pct = int(100 * i / total)
+        if i % 5 == 0:
+            print(f"APP_PROGRESS step=4 pct={pct}", flush=True)
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user",   "content": line["text"]},
+        ]
+        prompt = tokenizer.apply_chat_template(
+            messages, add_generation_prompt=True, tokenize=False
+        )
+        cleaned = generate(
+            model, tokenizer,
+            prompt=prompt,
+            max_tokens=len(line["text"]) * 2 + 50,
+            verbose=False,
+        ).strip()
+
+        polished.append({**line, "text": cleaned or line["text"]})
+
+    print("APP_PROGRESS step=4 pct=100", flush=True)
+    print("✅ Polishing done.")
+    return polished
+
+
 def main():
     args = parse_args()
 
@@ -409,7 +476,11 @@ def main():
     lines = merge_transcript_and_diarization(whisper_result, diarization)
     print("APP_PROGRESS step=2 pct=100", flush=True)
 
-    # Step 4: Output
+    # Step 4: Polish (optional LLM cleanup)
+    if args.polish:
+        lines = polish_transcript(lines, args.polish_model, args.language)
+
+    # Step 5: Output
     transcript = format_transcript(lines)
     print("\n" + "=" * 60)
     print(transcript)

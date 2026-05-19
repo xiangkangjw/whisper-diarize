@@ -5,6 +5,8 @@ struct SettingsView: View {
     @AppStorage("model")     private var model = "mlx-community/whisper-large-v3-mlx"
     @AppStorage("language")  private var language = ""
     @AppStorage("speakers")  private var speakersRaw = 0
+    @AppStorage("polish")    private var polish = false
+    @AppStorage("polishModel") private var polishModel = "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
 
     var body: some View {
         Form {
@@ -80,6 +82,26 @@ struct SettingsView: View {
                 }
             } header: {
                 Text("Transcription")
+            }
+
+            Section {
+                Toggle(isOn: $polish) {
+                    Label("Polish with LLM", systemImage: "sparkles")
+                }
+                if polish {
+                    Picker("LLM Model", selection: $polishModel) {
+                        Text("Qwen2.5-1.5B (fast, ~1GB)").tag("mlx-community/Qwen2.5-1.5B-Instruct-4bit")
+                        Text("Qwen2.5-3B (better, ~2GB)").tag("mlx-community/Qwen2.5-3B-Instruct-4bit")
+                        Text("Qwen2.5-7B (best, ~4GB)").tag("mlx-community/Qwen2.5-7B-Instruct-4bit")
+                    }
+                    LabeledContent("") {
+                        Text("Adds punctuation and cleans up the final transcript using a local LLM. First run downloads the model.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("Polish (LLM Post-processing)")
             }
 
             Section {
