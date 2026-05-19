@@ -2,7 +2,7 @@ APP_RESOURCES = app/Sources/WhisperDiarize/Resources
 
 .PHONY: sync-app-resources test test-ui run
 
-# Build a proper .app bundle and launch it
+# Build a proper .app bundle, ad-hoc sign it, and launch
 run:
 	cd app && swift build
 	@mkdir -p app/.build/WhisperDiarize.app/Contents/MacOS
@@ -10,6 +10,7 @@ run:
 	cp app/.build/debug/WhisperDiarize app/.build/WhisperDiarize.app/Contents/MacOS/
 	cp app/Sources/WhisperDiarize/Info.plist app/.build/WhisperDiarize.app/Contents/
 	@cp -r app/.build/debug/WhisperDiarize_WhisperDiarize.bundle app/.build/WhisperDiarize.app/Contents/Resources/ 2>/dev/null || true
+	codesign --force --deep --sign - app/.build/WhisperDiarize.app
 	open app/.build/WhisperDiarize.app
 
 sync-app-resources:
