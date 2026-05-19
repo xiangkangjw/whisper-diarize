@@ -90,6 +90,13 @@ def transcribe_with_mlx(audio_path: str, model: str, language: str | None):
     global _APP_STEP
     _APP_STEP = 0
 
+    # initial_prompt nudges Whisper to output punctuation and avoid hallucination
+    prompt = (
+        "以下是一段中文对话，请输出标准普通话，带标点符号。"
+        if not language or language.startswith("zh")
+        else "Transcript of a multi-speaker conversation."
+    )
+
     print(f"🎙️  Transcribing with mlx-whisper ({model})...")
     result = mlx_whisper.transcribe(
         audio_path,
@@ -97,6 +104,7 @@ def transcribe_with_mlx(audio_path: str, model: str, language: str | None):
         word_timestamps=True,
         language=language,
         verbose=None,  # None = tqdm progress bars
+        initial_prompt=prompt,
     )
     print(f"APP_PROGRESS step=0 pct=100", flush=True)
     print(f"✅ Transcription done. Detected language: {result.get('language', 'unknown')}")
@@ -212,14 +220,51 @@ def merge_transcript_and_diarization(whisper_result, diarization):
 
     # Post-process: merge short fragments into neighbours
     lines = _merge_short_fragments(lines)
-    # Post-process: drop noise-only lines (repeated chars, e.g. 这这这这这)
-    lines = [l for l in lines if not _is_noise(l["text"])]
+    # Post-process: strip leading/trailing noise from each line
+    for line in lines:
+        line["text"] = _strip_noise(line["text"])
+    # Post-process: drop noise-only or now-empty lines
+    lines = [l for l in lines if l["text"] and not _is_noise(l["text"])]
+    # Post-process: split very long lines on sentence boundaries
+    lines = _split_long_lines(lines)
 
     return lines
 
 
 _MIN_DURATION = 0.8   # seconds — lines shorter than this get merged into the previous
 
+import re as _re
+
+_MAX_LINE_DURATION = 60.0   # seconds — lines longer than this get split
+_SENTENCE_SPLIT_RE = _re.compile(r'(?<=[。！？.!?])\s*')  # split after sentence-ending punctuation
+
+def _split_long_lines(lines: list) -> list:
+    """Split lines longer than _MAX_LINE_DURATION on sentence boundaries."""
+    out = []
+    for line in lines:
+        duration = line["end"] - line["start"]
+        if duration <= _MAX_LINE_DURATION:
+            out.append(line)
+            continue
+        # Split text on sentence boundaries
+        sentences = [s.strip() for s in _SENTENCE_SPLIT_RE.split(line["text"]) if s.strip()]
+        if len(sentences) <= 1:
+            out.append(line)  # can't split, keep as-is
+            continue
+        # Distribute time proportionally to sentence length
+        total_chars = sum(len(s) for s in sentences)
+        cursor = line["start"]
+        for sentence in sentences:
+            ratio = len(sentence) / total_chars if total_chars > 0 else 1 / len(sentences)
+            seg_dur = duration * ratio
+            out.append({
+                "start":   cursor,
+                "end":     cursor + seg_dur,
+                "speaker": line["speaker"],
+                "text":    sentence,
+            })
+            cursor += seg_dur
+    return out
 _SEG_MIN_DURATION = 0.3   # drop diarization blips shorter than this
 _SEG_MAX_GAP      = 0.5   # merge same-speaker segments with gaps smaller than this
 
@@ -264,11 +309,20 @@ def _merge_short_fragments(lines):
     return out
 
 
-import re as _re
-_REPEAT_RE = _re.compile(r'^(.)\1{4,}$')  # 5+ repetitions of same char
+_REPEAT_RE = _re.compile(r'^(.)\1{2,}$')  # 3+ repetitions of same char = noise
+_NOISE_STRIP_RE = _re.compile(r'^(?:(.)\1{2,})+')  # leading noise runs (3+)
 
 def _is_noise(text):
     return bool(_REPEAT_RE.match(text.strip()))
+
+
+def _strip_noise(text: str) -> str:
+    """Remove leading and trailing runs of 4+ repeated characters."""
+    # Strip leading noise (e.g. 这这这这这这...)
+    text = _NOISE_STRIP_RE.sub('', text).strip()
+    # Strip trailing noise
+    text = _re.sub(r'(?:(.)\1{3,})+$', '', text).strip()
+    return text
 
 
 def format_time(seconds: float) -> str:
